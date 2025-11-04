@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel 分潤報表轉換工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Microsoft JhengHei", "微軟正黑體", Arial, sans-serif;
+      background: linear-gradient(to bottom right, #fefce8, #fef3c7);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      border-top: 4px solid #FFC800;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .header-title { display: flex; align-items: center; gap: 0.75rem; }
+    .header-title svg { width: 2rem; height: 2rem; color: #FFC800; }
+    .header-title h1 { font-size: 1.875rem; font-weight: bold; color: #1f2937; }
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #f3f4f6;
+      color: #374151;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.875rem;
+    }
+    .copy-btn:hover { background: #e5e7eb; }
+    .copy-btn svg { width: 1rem; height: 1rem; }
+    .info-box {
+      background: #fefce8;
+      border-left: 4px solid #FFC800;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .info-box h2 { font-weight: 600; color: #1f2937; margin-bottom: 0.5rem; }
+    .info-box ul { list-style: none; font-size: 0.875rem; color: #374151; }
+    .info-box li { margin-top: 0.25rem; }
+    .filter-box {
+      background: #f9fafb;
+      border: 2px solid #FFC800;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .filter-box h3 { font-size: 1rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .filter-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; }
+    .filter-group { display: flex; flex-direction: column; }
+    .filter-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem; }
+    .filter-input {
+      width: 100%;
+      padding: 0.625rem;
+      border: 2px solid #d1d5db;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      transition: border-color 0.2s;
+    }
+    .filter-input:focus { outline: none; border-color: #FFC800; box-shadow: 0 0 0 3px rgba(255, 200, 0, 0.1); }
+    .file-input-wrapper { margin-bottom: 1.5rem; }
+    .file-input-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 0.5rem;
+    }
+    .file-input-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      border: 2px dashed #d1d5db;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .file-input-box:hover { border-color: #FFC800; background: #fefce8; }
+    .file-input-box svg { width: 1.5rem; height: 1.5rem; color: #9ca3af; margin-right: 0.5rem; }
+    .file-input-box span { color: #4b5563; }
+    .file-input-box input { display: none; }
+    .process-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: #FFC800;
+      color: #000;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .process-btn:hover:not(:disabled) { background: #fbbf24; }
+    .process-btn:disabled { background: #d1d5db; cursor: not-allowed; }
+    .process-btn svg { width: 1.25rem; height: 1.25rem; }
+    .spinner {
+      display: inline-block;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 2px solid #000;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box {
+      margin-top: 1.5rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      display: flex;
+      gap: 0.75rem;
+    }
+    .error-box svg { width: 1.25rem; height: 1.25rem; color: #dc2626; flex-shrink: 0; margin-top: 0.125rem; }
+    .error-box h3 { font-weight: 600; color: #7f1d1d; }
+    .error-box p { color: #991b1b; font-size: 0.875rem; }
+    .result-box {
+      margin-top: 1.5rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }
+    .result-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .result-header svg { width: 1.5rem; height: 1.5rem; color: #16a34a; }
+    .result-header h3 { font-weight: 600; color: #14532d; }
+    .download-all-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #16a34a;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 1rem;
+    }
+    .download-all-btn:hover { background: #15803d; }
+    .download-all-btn svg { width: 1.25rem; height: 1.25rem; }
+    .file-list { max-height: 384px; overflow-y: auto; }
+    .file-item {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: box-shadow 0.2s;
+    }
+    .file-item:hover { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .file-info { flex: 1; }
+    .file-info .name { font-weight: 500; color: #1f2937; }
+    .file-info .address { font-size: 0.875rem; color: #4b5563; margin-top: 0.25rem; }
+    .file-info .details { display: flex; gap: 1rem; margin-top: 0.5rem; }
+    .file-info .details p { font-size: 0.875rem; color: #6b7280; }
+    .file-info .details span { font-weight: 600; }
+    .file-actions { display: flex; gap: 0.5rem; margin-left: 1rem; }
+    .download-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #fef3c7;
+      color: #78350f;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.875rem;
+    }
+    .download-btn:hover { background: #fde68a; }
+    .download-btn svg { width: 1rem; height: 1rem; }
+    .preview-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #dbeafe;
+      color: #1e40af;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.875rem;
+    }
+    .preview-btn:hover { background: #bfdbfe; }
+    .preview-btn svg { width: 1rem; height: 1rem; }
+    .tip-box {
+      margin-top: 1rem;
+      background: #fefce8;
+      border-left: 4px solid #FFC800;
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+    }
+    .tip-box p { font-size: 0.875rem; color: #78350f; line-height: 1.6; }
+    .footer { margin-top: 1.5rem; text-align: center; font-size: 0.875rem; color: #4b5563; min-height: 1rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="header-title">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <h1>Excel 分潤報表轉換工具</h1>
+        </div>
+        <button class="copy-btn" onclick="copyUrl()">
+          <svg id="copyIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+          </svg>
+          <span id="copyText">複製網址</span>
+        </button>
+      </div>
+
+      <div class="info-box">
+        <h2>處理說明:</h2>
+        <ul>
+          <li>• 請上傳社區分潤報表(EIPS系統>財務>下屏分潤)</li>
+          <li>• 每個社區的每個月份將產生一個獨立的HTML檔案</li>
+          <li>• 下載後可用瀏覽器開啟,並列印成 PDF</li>
+        </ul>
+      </div>
+
+      <div class="file-input-wrapper">
+        <label class="file-input-label">選擇 Excel 檔案</label>
+        <label class="file-input-box" for="fileInput">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+          </svg>
+          <span id="fileLabel">點擊選擇檔案</span>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+        </label>
+      </div>
+
+      <div class="filter-box">
+        <h3>🔍 篩選條件</h3>
+        <div class="filter-row">
+          <div class="filter-group">
+            <label class="filter-label">社區ID / 社區名稱</label>
+            <input type="text" id="searchInput" class="filter-input" placeholder="輸入社區ID或名稱搜尋...">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">分潤年月(起)</label>
+            <input type="month" id="startMonth" class="filter-input">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">分潤年月(迄)</label>
+            <input type="month" id="endMonth" class="filter-input">
+          </div>
+        </div>
+      </div>
+
+      <button class="process-btn" id="processBtn" onclick="processExcel()" disabled>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span>開始處理</span>
+      </button>
+
+      <div id="errorBox" class="error-box hidden">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+          <h3>錯誤</h3>
+          <p id="errorMessage"></p>
+        </div>
+      </div>
+
+      <div id="resultBox" class="result-box hidden">
+        <div class="result-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <h3 id="resultTitle"></h3>
+        </div>
+
+        <button class="download-all-btn" onclick="downloadAll()">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          <span>下載全部檔案(ZIP 壓縮檔)</span>
+        </button>
+
+        <div id="fileList" class="file-list"></div>
+
+        <div class="tip-box">
+          <p>
+            <strong>💡 如何轉成 PDF:</strong><br/>
+            1. 下載 HTML 檔案<br/>
+            2. 用瀏覽器(Chrome/Edge)開啟檔案<br/>
+            3. 按 Ctrl+P (Windows) 或 Cmd+P (Mac)<br/>
+            4. 選擇「另存為 PDF」或「Microsoft Print to PDF」<br/>
+            5. 儲存檔案
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p></p>
+    </div>
+  </div>
+
+  <script>
+    let selectedFile = null;
+    let allProcessedFiles = [];
+    let filteredFiles = [];
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      selectedFile = e.target.files[0];
+      if (selectedFile) {
+        document.getElementById('fileLabel').textContent = selectedFile.name;
+        document.getElementById('processBtn').disabled = false;
+        document.getElementById('errorBox').classList.add('hidden');
+        document.getElementById('resultBox').classList.add('hidden');
+      }
+    });
+
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('startMonth').addEventListener('change', applyFilters);
+    document.getElementById('endMonth').addEventListener('change', applyFilters);
+
+    function applyFilters() {
+      const searchText = document.getElementById('searchInput').value.toLowerCase().trim();
+      let startMonth = document.getElementById('startMonth').value.replace('-', '');
+      let endMonth = document.getElementById('endMonth').value.replace('-', '');
+
+      filteredFiles = allProcessedFiles.filter(file => {
+        // 搜尋條件：社區ID或社區名稱包含搜尋文字
+        const matchSearch = !searchText || 
+          file.communityId.toLowerCase().includes(searchText) ||
+          file.communityName.toLowerCase().includes(searchText);
+        
+        // 起始月份條件 (比較 YYYYMM 格式)
+        const matchStartMonth = !startMonth || parseInt(file.profitMonth) >= parseInt(startMonth);
+        
+        // 結束月份條件 (比較 YYYYMM 格式)
+        const matchEndMonth = !endMonth || parseInt(file.profitMonth) <= parseInt(endMonth);
+
+        return matchSearch && matchStartMonth && matchEndMonth;
+      });
+
+      if (allProcessedFiles.length > 0) {
+        updateFileList();
+      }
+    }
+
+    function generateHTMLContent(headers, rows, communityName, communityAddress, profitMonth) {
+      const selectedHeaders = ['委刊名稱', '開始日期', '結束日期', '刊登週數', '刊登台數', '分潤金額'];
+      const selectedRows = rows.map(row => [
+        row[6], row[7], row[8], row[9], row[10], row[11]
+      ]);
+      
+      const totalAmount = rows.reduce((sum, row) => sum + (parseFloat(row[11]) || 0), 0);
+      
+      // 格式化分潤年月為 YYYY/MM
+      const formattedMonth = profitMonth.substring(0, 4) + '/' + profitMonth.substring(4, 6);
+
+      return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${communityName}-分眾廣告分潤對帳單-${profitMonth}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: A4 landscape; margin: 15mm; }
+    body { font-family: "Microsoft JhengHei", "微軟正黑體", Arial, sans-serif; padding: 20px; background: white; line-height: 1.6; position: relative; }
+    body::before {
+      content: "僅供金額確認";
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 120px;
+      color: rgba(100, 100, 100, 0.15);
+      font-weight: bold;
+      z-index: 9999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .header { margin-bottom: 25px; page-break-after: avoid; padding-bottom: 15px; }
+    .header h1 { font-size: 24px; color: #000000; margin-bottom: 15px; font-weight: bold; text-align: center; }
+    .header .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #4b5563;
+      margin-top: 10px;
+    }
+    .header .info-left { text-align: left; flex: 1; }
+    .header .info-right { text-align: right; flex: 1; }
+    .table-container { width: 100%; overflow: visible; margin-top: 15px; position: relative; z-index: 1; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); position: relative; z-index: 1; background: white; }
+    th, td { border: 1.2px solid #d1d5db; padding: 8px 10px; word-wrap: break-word; overflow-wrap: break-word; white-space: normal; vertical-align: middle; }
+    th { background-color: #FFC800; color: #000000; font-weight: bold; font-size: 11pt; text-align: center; }
+    td { text-align: left; }
+    tr:nth-child(even) { background-color: #FFFBEA; }
+    tr:nth-child(odd) { background-color: #ffffff; }
+    tbody tr:hover { background-color: #FFF4CC; }
+    th:nth-child(1) { width: 25%; }
+    td:nth-child(1) { width: 25%; }
+    th:nth-child(2) { width: 15%; }
+    td:nth-child(2) { width: 15%; text-align: center; }
+    th:nth-child(3) { width: 15%; }
+    td:nth-child(3) { width: 15%; text-align: center; }
+    th:nth-child(4) { width: 15%; }
+    td:nth-child(4) { width: 15%; text-align: center; }
+    th:nth-child(5) { width: 15%; }
+    td:nth-child(5) { width: 15%; text-align: center; }
+    th:nth-child(6) { width: 15%; }
+    td:nth-child(6) { width: 15%; text-align: right; }
+    .total-row { background-color: #e5e7eb !important; font-weight: bold; }
+    .total-row td { border-top: 1.5px solid #d1d5db; }
+    .footer { margin-top: 30px; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #6b7280; page-break-inside: avoid; }
+    .footer .footer-left { text-align: left; }
+    .footer .footer-right { text-align: right; }
+    @media print {
+      body { padding: 0; background: white; }
+      body::before { color: rgba(100, 100, 100, 0.12); white-space: nowrap; }
+      .header { margin-bottom: 20px; }
+      table { page-break-inside: auto; box-shadow: none; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      th, td { border: 1.2px solid #d1d5db; }
+      th { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; background-color: #FFC800 !important; color: #000000 !important; }
+      tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #FFFBEA !important; }
+      .total-row { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #e5e7eb !important; }
+      .footer { border-top: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>分眾廣告分潤對帳單</h1>
+    <div class="info-row">
+      <div class="info-left">${communityName}(${communityAddress})</div>
+      <div class="info-right">分潤年月:${formattedMonth}</div>
+    </div>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr>${selectedHeaders.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${selectedRows.map(row => `<tr>${row.map((cell, idx) => `<td>${cell !== null && cell !== undefined ? cell : ''}</td>`).join('')}</tr>`).join('')}
+        <tr class="total-row">
+          <td colspan="5" style="text-align: right; padding-right: 20px;">合計金額:</td>
+          <td style="text-align: right;">${totalAmount.toFixed(0)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="footer">
+    <div class="footer-left">共 ${selectedRows.length} 筆資料</div>
+    <div class="footer-right">產生日期:${new Date().toLocaleDateString('zh-TW')}</div>
+  </div>
+</body>
+</html>`;
+    }
+
+    async function processExcel() {
+      if (!selectedFile) return;
+      const processBtn = document.getElementById('processBtn');
+      processBtn.disabled = true;
+      processBtn.innerHTML = '<span class="spinner"></span><span>處理中...</span>';
+      document.getElementById('errorBox').classList.add('hidden');
+      document.getElementById('resultBox').classList.add('hidden');
+
+      try {
+        const data = await selectedFile.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        if (jsonData.length < 2) throw new Error('Excel 檔案沒有足夠的資料');
+
+        const headers = jsonData[0];
+        const dataRows = jsonData.slice(1);
+        const groupedData = {};
+
+        dataRows.forEach((row, index) => {
+          if (!row || row.length === 0) return;
+          const communityId = row[0]?.toString().trim();
+          const communityName = row[1]?.toString().trim();
+          const endDate = row[8]?.toString().trim();
+          const profitAmount = parseFloat(row[11]) || 0;
+
+          if (profitAmount === 0) return;
+          if (!communityId || !communityName || !endDate) {
+            console.warn(`第 ${index + 2} 列資料不完整,已跳過`);
+            return;
+          }
+
+          let profitMonth = '';
+          if (endDate) {
+            const dateMatch = endDate.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+            if (dateMatch) {
+              profitMonth = `${dateMatch[1]}${dateMatch[2].padStart(2, '0')}`;
+            }
+          }
+
+          if (!profitMonth) {
+            console.warn(`第 ${index + 2} 列無法解析結束日期,已跳過`);
+            return;
+          }
+
+          const key = `${communityId}_${profitMonth}`;
+          if (!groupedData[key]) {
+            groupedData[key] = { communityId, communityName, communityAddress: row[2] || '', profitMonth, rows: [] };
+          }
+
+          const rowWithProfitMonth = [...row];
+          rowWithProfitMonth.profitMonth = profitMonth;
+          groupedData[key].rows.push(rowWithProfitMonth);
+        });
+
+        allProcessedFiles = Object.entries(groupedData).map(([key, data]) => {
+          const htmlContent = generateHTMLContent(headers, data.rows, data.communityName, data.communityAddress, data.profitMonth);
+          const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+          const totalAmount = data.rows.reduce((sum, row) => sum + (parseFloat(row[11]) || 0), 0);
+          
+          // 格式化分潤年月為 YYYY-MM 供搜尋使用
+          const displayMonth = data.profitMonth.substring(0, 4) + '-' + data.profitMonth.substring(4, 6);
+          
+          return {
+            key, fileName: `${data.communityName}-分眾廣告分潤對帳單-${data.profitMonth}.html`,
+            communityId: data.communityId,
+            communityName: data.communityName,
+            address: data.communityAddress,
+            profitMonth: data.profitMonth,
+            displayMonth: displayMonth,
+            profitAmount: totalAmount.toFixed(0),
+            rowCount: data.rows.length, blob: blob
+          };
+        });
+
+        filteredFiles = [...allProcessedFiles];
+        showResults();
+      } catch (err) {
+        showError(err.message || '處理檔案時發生錯誤');
+      } finally {
+        processBtn.disabled = false;
+        processBtn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>開始處理</span>';
+      }
+    }
+
+    function showError(message) {
+      document.getElementById('errorMessage').textContent = message;
+      document.getElementById('errorBox').classList.remove('hidden');
+    }
+
+    function showResults() {
+      updateFileList();
+      document.getElementById('resultBox').classList.remove('hidden');
+    }
+
+    function updateFileList() {
+      document.getElementById('resultTitle').textContent = `處理完成!共產生 ${allProcessedFiles.length} 個檔案 (顯示 ${filteredFiles.length} 個)`;
+      const fileList = document.getElementById('fileList');
+      fileList.innerHTML = filteredFiles.map((file) => {
+        const originalIndex = allProcessedFiles.indexOf(file);
+        return `
+        <div class="file-item">
+          <div class="file-info">
+            <div class="name">${file.communityName} (ID: ${file.communityId})</div>
+            <div class="address">${file.address}</div>
+            <div class="details">
+              <p><span>分潤年月:</span>${file.displayMonth}</p>
+              <p><span>分潤金額:</span>${file.profitAmount}</p>
+            </div>
+          </div>
+          <div class="file-actions">
+            <button class="preview-btn" onclick="previewFile(${originalIndex})">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+              </svg>
+              <span>預覽</span>
+            </button>
+            <button class="download-btn" onclick="downloadFile(${originalIndex})">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>下載</span>
+            </button>
+          </div>
+        </div>
+      `;}).join('');
+    }
+
+    function downloadFile(index) {
+      const file = allProcessedFiles[index];
+      const url = URL.createObjectURL(file.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function previewFile(index) {
+      const file = allProcessedFiles[index];
+      const url = URL.createObjectURL(file.blob);
+      window.open(url, '_blank');
+    }
+
+    async function downloadAll() {
+      try {
+        const zip = new JSZip();
+        filteredFiles.forEach((file) => {
+          zip.file(file.fileName, file.blob);
+        });
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+        a.download = `分潤對帳單_${dateStr}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('壓縮檔案失敗:', err);
+        alert('產生壓縮檔時發生錯誤:' + err.message + '\n請改用個別下載。');
+      }
+    }
+
+    function copyUrl() {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        document.getElementById('copyText').textContent = '已複製';
+        setTimeout(() => {
+          document.getElementById('copyText').textContent = '複製網址';
+        }, 2000);
+      }).catch(err => {
+        console.error('複製失敗:', err);
+      });
+    }
+  </script>
+</body>
+</html>
